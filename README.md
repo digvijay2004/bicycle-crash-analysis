@@ -1,0 +1,3 @@
+Bicycle Crash Analysis — Data Exploration & Modeling (R Project)
+This project analyzes bicycle usage and crash-related patterns using statistical methods and exploratory data analysis in R. The goal is to uncover meaningful insights from real-world bicycle data, identify patterns, and build a foundation for understanding factors that influence bicycle-related incidents.
+The analysis, visualizations, and conclusions are implemented in an R Markdown workflow using the dataset provided in this repository.

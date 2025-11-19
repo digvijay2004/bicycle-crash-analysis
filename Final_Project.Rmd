@@ -1,0 +1,382 @@
+---
+title: "Final Project ML"
+author: "Sia and Digvijay"
+date: "2023-11-15"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+#Loading the libraries
+```{r}
+library(plyr)
+library(readr)
+library(dplyr)
+library(caret)
+library(ISLR2)
+library(leaps)
+library(glmnet)
+library(caTools)
+library(glmnet)
+library(caret)
+library(MASS)
+library(bestglm)
+library(caret)
+library(pROC)
+library(tree)
+library(corrplot)
+library(ROSE)
+library(smotefamily)
+library(rpart)
+library(rpart.plot)
+library(randomForest)
+library(xgboost)
+
+```
+
+#Importing the data 
+```{r}
+crashes <- read.csv("C:/Users/CEAS-USER/Dropbox/MASOMO/Machine Learning/Final Project/bicycle_new_use_final.csv")
+summary(crashes)
+```
+
+*Pre-processing the data*
+#Ommiting missing variables
+```{r}
+sum(is.na(crashes))
+crashes <- na.omit(crashes)
+sum(is.na(crashes))
+glimpse(crashes)
+```
+#Maintaining factor variables
+```{r}
+column_names <- colnames(crashes)
+crashes[,column_names] <- lapply(crashes[, column_names], factor)
+glimpse(crashes)
+```
+#Data Visualization
+```{r}
+count_result <- crashes %>% count(intersection, severity)
+print(count_result)
+
+```
+
+##Data Splitting and Balancing
+```{r}
+table(crashes$severity)
+9217/51914
+
+set.seed(25)
+spl = sample.split(crashes$severity, SplitRatio = 0.80)
+
+spl
+train_data = subset(crashes, spl==TRUE)
+test_data = subset(crashes, spl==FALSE)
+
+#Data Balancing
+table(train_data$severity)
+rose_data <- ROSE(severity ~ ., data = train_data, seed = 123)$data
+table(rose_data$severity)
+
+
+#####
+
+y <- crashes$severity
+x <- model.matrix(severity ~ .,crashes)[,-1]
+
+x_train =subset(x, spl==TRUE) 
+y_train = subset(y, spl==TRUE)
+x_test = subset(x, spl==FALSE)
+y_test = subset(y, spl==FALSE)
+```
+
+#Data balancing plots
+```{r}
+notbalanced <- table(train_data$severity)
+balanced <- table(rose_data$severity)
+
+barplot(notbalanced, col = c("lightblue", "lightgreen"), main = "Severity Distribution", xlab = "Severity", ylab = "Count", names.arg = c("0", "1"))
+
+barplot(balanced, col = c("blue", "darkgreen"), main = "Severity Distribution", xlab = "Severity", ylab = "Count", names.arg = c("0", "1"))
+```
+##Feature selection
+```{r}
+#Best subset selection in logistic regression
+#Best subset wasnt applied since it has  limitation of p<=15, however our dataset has 18 variables. Although it is a good method, it has a high computational time.
+library(bestglm)
+
+best.logit <- bestglm(crashes, IC = "AIC", family = binomial, method = "exhaustive")
+summary(best.logit$BestModel)
+best.logit$Subsets
+```
+
+```{r}
+#Forward stepwise selection in logistic regression
+full.model = glm(severity ~ ., family=binomial, data=crashes)
+null.model = glm(severity ~ 1, family=binomial, data=crashes)
+
+summary(stepAIC(null.model, # start with a model containing no variables
+                direction = 'forward', # run forward selection
+                scope = list(upper = full.model, # the maximum to consider is a model with all variables
+                             lower = null.model), # the minimum to consider is a model with no variables
+                trace = 0))
+```
+
+```{r}
+#Backward stepwise selection in logistic regression
+full.model = glm(severity ~ ., family=binomial, data=crashes)
+null.model = glm(severity ~ 1, family=binomial, data=crashes)
+
+summary(stepAIC(full.model, # start with a model containing no variables
+                direction = 'backward', # run backward selection
+                scope = list(upper = full.model, # the maximum to consider is a model with all variables
+                             lower = null.model), # the minimum to consider is a model with no variables
+                trace = 0))
+```
+
+
+
+```{r}
+#lasso in logistic regression
+set.seed (10)
+cv.lasso <- cv.glmnet(x, y, alpha=1, nfolds=10, family ="binomial")
+plot(cv.lasso)
+bestlam.2 <- cv.lasso$lambda.min
+
+#Fit the lasso model on training dataset
+lasso_train <- glmnet(x_train,y_train,family = "binomial", alpha = 1, lambda = bestlam.2)
+lasso_train$beta
+
+#Make predictions on test data
+lasso.pred <- predict(lasso_train, s =bestlam.2,newx = x_test)
+lasso.pred.classes <- ifelse(lasso.pred>0.5, "1", "0")
+
+mean(lasso.pred.classes==y_test)
+table(lasso.pred.classes, y_test)
+
+#confusion matrix
+confusionMatrix(as.factor(lasso.pred.classes),y_test, mode="everything", positive = "1")
+ROC_lasso <- roc(y_test,as.numeric(lasso.pred.classes))
+
+auc(ROC_lasso) #Area under the curve is0.531
+
+plot(roc.glmnet(lasso_train, newx = x_test, newy=y_test))
+```
+##Logistic Regression
+```{r}
+# Assuming 'your_data' is your data frame
+Logit_model = glm(severity ~ dayofwk+lightcond+alcohol+drug+traffic_signal+relationtord+ nolanes+truckinv+intersection+direction+     gender+age+speedlmt, data = rose_data, family=binomial)
+
+summary(Logit_model)
+
+#testing the accuracy of the data
+predict_logit = predict(Logit_model, newdata=test_data)
+summary(predict_logit)
+
+predictlogit.classes <- ifelse(predict_logit > 0.5, 1,0)
+
+confusionMatrix(as.factor(predictlogit.classes),y_test, mode="everything", positive = "1")
+ROC_logit <- roc(y_test,as.numeric(predictlogit.classes))
+
+roc_logit <- roc(y_test, predictlogit.classes)
+auc(ROC_logit) 
+plot(roc_logit, main = "ROC Curve for Logistic Regression", col = "red", lwd = 1.5)
+# Add AUC to the plot
+text(0.8, 0.2, paste("AUC =", round(auc(ROC_logit), 3)), col = "blue", cex = 1.1)
+```
+
+
+
+#Fitting a random forest
+```{r}
+#Cross validation to find the number of variables randomly sampled
+# Install and load necessary packages
+# install.packages("caret")
+library(caret)
+
+# Assuming your_data is your dataset and response is your binary target variable
+
+# Set up a control object for 5-fold cross-validation
+ctrl <- trainControl(method = "cv", number = 5)
+
+# Create a vector of candidate mtry values
+candidate_mtry <- c(1, round(sqrt(ncol(rose_data) - 1)), ncol(rose_data) - 1)
+
+# Fit models with different mtry values using cross-validation
+model_results <- list()
+
+for (m in candidate_mtry) {
+  rf_model <- train(severity ~dayofwk+lightcond+alcohol+drug+traffic_signal+relationtord+ nolanes+truckinv+intersection+direction+     gender+age+speedlmt, data = rose_data, method = "rf",
+                    trControl = ctrl, tuneGrid = data.frame(mtry = m),
+                    ntree = 500)
+  
+  model_results[[as.character(m)]] <- rf_model
+}
+
+# Print and compare results
+for (m in candidate_mtry) {
+  cat("mtry =", m, "\n")
+  print(model_results[[as.character(m)]])
+  cat("\n")
+}
+
+# Extract the best mtry based on cross-validated performance
+best_mtry <- as.numeric(model_results[[as.character(candidate_mtry[which.min(sapply(model_results, function(model) model$results$Accuracy))])]]$bestTune$mtry)
+
+
+cat("Best mtry based on cross-validated performance:", best_mtry, "\n")
+
+# Fit the final model with the selected mtry
+final_rf_model <- randomForest(severity ~ ., data = rose_data, ntree = 500, mtry = best_mtry)
+print(final_rf_model)
+
+varImpPlot(final_rf_model) #Higher values of Mean Decrease Gini indicate higher variable importance.
+```
+
+#Testing the accuracy
+```{r}
+# Make predictions on the training data
+pred_rf <- predict(final_rf_model, newdata= test_data, type = "response")
+
+# Create a ROC curve
+roc_rfmodel <- roc(test_data$severity, as.numeric(pred_rf))
+
+# Plot the ROC curve
+plot(roc_rfmodel, main = "ROC Curve for Random Forest", col = "darkblue", lwd = 2)
+
+# Add AUC to the plot
+text(0.8, 0.2, paste("AUC =", round(auc(roc_rfmodel), 3)), col = "green", cex = 1.2)
+
+# Add 45-degree reference line for comparison
+abline(a = 0, b = 1, col = "gray", lty = 2)
+```
+#XGBOOST
+
+```{r}
+library(xgboost)
+library(pdp)
+library(margins)
+library(ggplot2)
+
+
+# Split the data into training and testing sets
+set.seed(25)
+spl = sample.split(crashes$severity, SplitRatio = 0.80)
+train_data = subset(crashes, spl==TRUE)
+test_data = subset(crashes, spl==FALSE)
+
+# Remove rows with missing values in the target variable
+train_data <- na.omit(train_data, cols = "severity")
+
+
+# Convert factor predictor variables to numeric
+
+train_data$dayofwk <- as.numeric(as.factor(train_data$dayofwk))
+train_data$lightcond<- as.numeric(as.factor(train_data$lightcond))
+train_data$alcohol<- as.numeric(as.factor(train_data$alcohol))
+train_data$drug<- as.numeric(as.factor(train_data$drug))
+train_data$traffic_signal<- as.numeric(as.factor(train_data$traffic_signal))
+train_data$relationtord<- as.numeric(as.factor(train_data$relationtord))
+train_data$roadcond<- as.numeric(as.factor(train_data$roadcond))
+train_data$nolanes<- as.numeric(as.factor(train_data$nolanes))
+train_data$truckinv<- as.numeric(as.factor(train_data$truckinv))
+train_data$speedlmt<- as.numeric(as.factor(train_data$speedlmt))
+train_data$intersection<- as.numeric(as.factor(train_data$intersection))
+train_data$direction<- as.numeric(as.factor(train_data$direction))
+train_data$gender<- as.numeric(as.factor(train_data$gender))
+train_data$age<- as.numeric(as.factor(train_data$age))
+
+# Extract target variable and predictor variables
+train_labels <- train_data$severity
+train_features <- train_data[, c("dayofwk","lightcond","alcohol","drug", "traffic_signal","relationtord","nolanes", "truckinv","speedlmt" ,"intersection","direction","age", "gender" )]
+
+# Train XGBoost model
+xgb_model <- xgboost(data = as.matrix(train_features), label = as.numeric(as.character(train_labels)), objective = "binary:logistic", nrounds = 100)
+
+# Predict on the test set
+
+test_data$dayofwk <- as.numeric(as.factor(test_data$dayofwk))
+test_data$lightcond<- as.numeric(as.factor(test_data$lightcond))
+test_data$alcohol<- as.numeric(as.factor(test_data$alcohol))
+test_data$drug<- as.numeric(as.factor(test_data$drug))
+test_data$traffic_signal<- as.numeric(as.factor(test_data$traffic_signal))
+test_data$relationtord<- as.numeric(as.factor(test_data$relationtord))
+test_data$roadcond<- as.numeric(as.factor(test_data$roadcond))
+test_data$nolanes<- as.numeric(as.factor(test_data$nolanes))
+test_data$truckinv<- as.numeric(as.factor(test_data$truckinv))
+test_data$speedlmt<- as.numeric(as.factor(test_data$speedlmt))
+test_data$intersection<- as.numeric(as.factor(test_data$intersection))
+test_data$direction<- as.numeric(as.factor(test_data$direction))
+test_data$gender<- as.numeric(as.factor(test_data$gender))
+test_data$age<- as.numeric(as.factor(test_data$age))
+
+test_labels <- test_data$severity
+test_labels <- as.numeric(as.character(test_labels))
+
+test_features <- test_data[,  c("dayofwk","lightcond","alcohol","drug", "traffic_signal","relationtord","nolanes", "truckinv","speedlmt" ,"intersection","direction","age", "gender")]
+
+
+xgb_pred <- predict(xgb_model, as.matrix(test_features), type = "response", thresholds = common_thresholds, specificity = TRUE)
+
+
+# Calculate the ROC curve
+roc_xgb <- pROC::roc(test_labels, xgb_pred)
+
+# Plot the ROC curve
+library(pROC)
+
+# Assuming 'roc_curve' is a roc object
+plot.roc(roc_xgb, col = "blue", main = "ROC Curve for XGBoost", col.main = "steelblue", lwd = 2)
+text(0.8, 0.2, paste("AUC =", round(auc(roc_curve), 3)), col = "green", cex = 1.0)
+
+```
+
+#Multiple ROC plots together
+```{r}
+# Plot ROC curves using pROC's plot.roc function
+plot(ROC_logit, col = "blue", main = "ROC Curves", col.main = "black", lwd = 2)
+lines(roc_rfmodel, col = "red", lwd = 2)
+lines(roc_xgb, col = "green", lwd = 2)
+
+# Add legend
+# Add AUC values to the legend
+legend("bottomright", legend = c(
+  paste("Logit (AUC =", round(auc(ROC_logit), 3), ")"),
+  paste("RF (AUC =", round(auc(roc_rfmodel), 3), ")"),
+  paste("XGBoost (AUC =", round(auc(roc_xgb), 3), ")")
+), col = c("blue", "red", "green"), lwd = 2)
+
+```
+
+
+#Understanding the variables
+```{r}
+# Install and load the iml package
+#install.packages("iml")
+# Assuming `xgb_model` is your trained XGBoost model
+importance_matrix <- xgb.importance(model = xgb_model)
+
+# Print the importance matrix
+print(importance_matrix)
+
+###
+#In XGBoost, the feature importance is given by three metrics: Gain, Cover, and Frequency. Here's how you can interpret each of them:
+#1. **Gain**: This is the average contribution of the feature to the model across all trees. The higher the value, the more important the feature in contributing to the model. In other words, it implies the total gain of each feature when it is used in trees.
+
+#2. **Cover**: This metric means the relative number of observations related to this feature. It is the number of times a feature is used to split the data across all trees.
+
+#3. **Frequency**: This is the percentage representing the relative number of times a particular feature occurs in the trees of the model.
+
+#In summary, Gain is based on the improvement in accuracy brought by a feature to the branches it is on. Cover measures the number of observations affected by a feature. Frequency is the percentage of trees that use a feature for splitting. All these measures allow you to understand the significance of the features in your model.
+
+```
+
+
