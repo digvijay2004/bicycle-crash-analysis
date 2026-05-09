@@ -1,3 +1,56 @@
-Bicycle Crash Analysis — Data Exploration & Modeling (R Project)
-This project analyzes bicycle usage and crash-related patterns using statistical methods and exploratory data analysis in R. The goal is to uncover meaningful insights from real-world bicycle data, identify patterns, and build a foundation for understanding factors that influence bicycle-related incidents.
-The analysis, visualizations, and conclusions are implemented in an R Markdown workflow using the dataset provided in this repository.
+# Crash Severity Prediction using Machine Learning
+
+## Overview
+This project predicts severe non-motorized crash occurrence involving pedestrians and cyclists using machine learning models.
+
+The project was originally implemented in R and later migrated to Python.
+
+## Dataset
+Michigan non-motorized crash dataset (2009–2021)
+
+## Machine Learning Models
+- Logistic Regression
+- LASSO Logistic Regression
+- Random Forest
+- XGBoost
+
+## Features
+- Data preprocessing
+- Handling imbalanced data
+- Train/test split
+- ROC-AUC evaluation
+- Feature importance analysis
+- Visualization outputs
+
+## Technologies Used
+- Python
+- Pandas
+- Scikit-learn
+- XGBoost
+- Matplotlib
+
+## Outputs
+- ROC Curves
+- Feature Importance Graphs
+- Classification Reports
+
+## How to Run
+
+Install dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+Run the project:
+
+```bash
+python crash_analysis_python.py
+```
+
+## Results
+XGBoost achieved the best performance with an AUC score of approximately 0.70.
+
+## Authors
+- Digvijay Bhagat
+- Sia Mwende

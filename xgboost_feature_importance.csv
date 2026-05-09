@@ -1,0 +1,14 @@
+feature,importance
+lightcond,0.2490656
+alcohol,0.14349811
+speedlmt,0.14140612
+intersection,0.10794112
+drug,0.099102
+truckinv,0.061498187
+traffic_signal,0.0423825
+age,0.035879422
+relationtord,0.030016726
+nolanes,0.025446145
+direction,0.023957733
+dayofwk,0.022350678
+gender,0.017455686
